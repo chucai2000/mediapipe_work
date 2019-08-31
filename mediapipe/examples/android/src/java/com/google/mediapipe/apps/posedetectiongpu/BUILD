@@ -47,7 +47,7 @@ android_library(
     srcs = glob(["*.java"]),
     assets = [
         ":binary_graph",
-        "//mediapipe/models:face_detection_front.tflite",
+        "//mediapipe/models:posenet_mobilenet_v1_100_257x257_multi_kpt_stripped.tflite",
         "//mediapipe/models:face_detection_front_labelmap.txt",
     ],
     assets_dir = "",

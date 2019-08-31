@@ -62,6 +62,13 @@ proto_library(
 )
 
 proto_library(
+    name = "posenet_tensors_to_detections_calculator_proto",
+    srcs = ["posenet_tensors_to_detections_calculator.proto"],
+    visibility = ["//visibility:public"],
+    deps = ["//mediapipe/framework:calculator_proto"],
+)
+
+proto_library(
     name = "tflite_tensors_to_landmarks_calculator_proto",
     srcs = ["tflite_tensors_to_landmarks_calculator.proto"],
     visibility = ["//visibility:public"],
@@ -114,6 +121,14 @@ mediapipe_cc_proto_library(
     cc_deps = ["//mediapipe/framework:calculator_cc_proto"],
     visibility = ["//mediapipe:__subpackages__"],
     deps = [":tflite_tensors_to_detections_calculator_proto"],
+)
+
+mediapipe_cc_proto_library(
+    name = "posenet_tensors_to_detections_calculator_cc_proto",
+    srcs = ["posenet_tensors_to_detections_calculator.proto"],
+    cc_deps = ["//mediapipe/framework:calculator_cc_proto"],
+    visibility = ["//mediapipe:__subpackages__"],
+    deps = [":posenet_tensors_to_detections_calculator_proto"],
 )
 
 mediapipe_cc_proto_library(
@@ -338,6 +353,35 @@ cc_library(
     }),
     alwayslink = 1,
 )
+
+cc_library(
+    name = "posenet_tensors_to_detections_calculator",
+    srcs = ["posenet_tensors_to_detections_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":posenet_tensors_to_detections_calculator_cc_proto",
+        "//mediapipe/framework/formats:detection_cc_proto",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+        "//mediapipe/framework/deps:file_path",
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework/formats:location",
+        "//mediapipe/framework/formats/object_detection:anchor_cc_proto",
+        "//mediapipe/framework/port:ret_check",
+        "@org_tensorflow//tensorflow/lite:framework",
+    ] + select({
+        "//mediapipe:android": [
+            "//mediapipe/gpu:gl_calculator_helper",
+            "@org_tensorflow//tensorflow/lite/delegates/gpu:gl_delegate",
+            "@org_tensorflow//tensorflow/lite/delegates/gpu/gl:gl_buffer",
+            "@org_tensorflow//tensorflow/lite/delegates/gpu/gl:gl_program",
+            "@org_tensorflow//tensorflow/lite/delegates/gpu/gl:gl_shader",
+        ],
+        "//conditions:default": [],
+    }),
+    alwayslink = 1,
+)
+
 
 cc_library(
     name = "tflite_tensors_to_landmarks_calculator",
