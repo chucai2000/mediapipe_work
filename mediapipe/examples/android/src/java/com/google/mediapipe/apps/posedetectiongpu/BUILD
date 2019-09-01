@@ -48,7 +48,8 @@ android_library(
     assets = [
         ":binary_graph",
         "//mediapipe/models:posenet_mobilenet_v1_100_257x257_multi_kpt_stripped.tflite",
-        "//mediapipe/models:face_detection_front_labelmap.txt",
+        "//mediapipe/models:mobilenet_v1_075_kpt_seg_parts_stripped_dilated.tflite",
+        #"//mediapipe/models:face_detection_front_labelmap.txt",
     ],
     assets_dir = "",
     manifest = "AndroidManifest.xml",

@@ -25,6 +25,8 @@
 #include "mediapipe/framework/formats/object_detection/anchor.pb.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "tensorflow/lite/interpreter.h"
+#include "mediapipe/framework/formats/image_frame.h"
+#include "mediapipe/framework/formats/image_frame_opencv.h"
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -75,6 +77,33 @@ void ConvertAnchorsToRawValues(const std::vector<Anchor>& anchors,
   }
 }
 
+const int WIDTH_FULL = 257;
+const int HEIGHT_FULL = 353;
+const int WIDTH_SMALL = 33;
+const int HEIGHT_SMALL = 45;
+const int NUM_KEYPOINTS = 17;
+const int NUM_CLASSES = 24;
+
+template <class T>
+class View {
+ public:
+  View(const T* data, int h, int w, int c) : data_(data), h_(h), w_(w), c_(c), w_stride_(c), h_stride_(c * w) {}
+  std::size_t index(int i, int j, int k) const {
+    return h_stride_ * i + w_stride_ * j + k;
+  }
+  const T& operator()(int i, int j, int k) const {
+    return data_[index(i, j, k)];
+  }
+  const T* data_;
+  int h_, w_, c_;
+  int w_stride_, h_stride_;
+};
+
+struct Keypoint {
+  float y;
+  float x;
+  float confidence;
+};
 }  // namespace
 
 // Convert result TFLite tensors from object detection models into MediaPipe
@@ -178,8 +207,15 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
   }
 #endif
 
-  if (cc->Outputs().HasTag("DETECTIONS")) {
-    cc->Outputs().Tag("DETECTIONS").Set<std::vector<Detection>>();
+  //if (cc->Outputs().HasTag("DETECTIONS")) {
+  //  cc->Outputs().Tag("DETECTIONS").Set<std::vector<Detection>>();
+  //}
+
+  if (cc->Inputs().HasTag("VIZ")) {
+    cc->Inputs().Tag("VIZ").Set<ImageFrame>();
+  }
+  if (cc->Outputs().HasTag("VIZ")) {
+    cc->Outputs().Tag("VIZ").Set<ImageFrame>();
   }
 
   if (cc->InputSidePackets().UsesTags()) {
@@ -208,7 +244,7 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
 #endif
   }
 
-  RETURN_IF_ERROR(LoadOptions(cc));
+  // RETURN_IF_ERROR(LoadOptions(cc));
   __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "tensor_to_detection open 002");
   side_packet_anchors_ = cc->InputSidePackets().HasTag("ANCHORS");
   __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "tensor_to_detection open 003");
@@ -242,13 +278,105 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
   }  // if gpu_input_
 
   // Output
-  if (cc->Outputs().HasTag("DETECTIONS")) {
-    cc->Outputs()
-        .Tag("DETECTIONS")
-        .Add(output_detections.release(), cc->InputTimestamp());
-  }
+  //if (cc->Outputs().HasTag("DETECTIONS")) {
+  //  cc->Outputs()
+  //      .Tag("DETECTIONS")
+  //      .Add(output_detections.release(), cc->InputTimestamp());
+  //}
 
   return ::mediapipe::OkStatus();
+}
+
+float lerp(const float v0, const float v1, const float t) {
+  return (1 - t) * v0 + t * v1;
+} 
+
+float BilinearSample(
+    const float* img, const float x, const float y, const float z, const int w, const int h, const int d) {
+  const int y0 = static_cast<int>(y);
+  const int x0 = static_cast<int>(x);
+  const int y1 = std::min((int)(y0 + 1), h - 1);
+  const int x1 = std::min((int)(x0 + 1), w - 1);
+  
+  const float yfrac = y - y0;
+  const float xfrac = x - x0;
+  
+  const int idx00 = d * (y0 * w + x0) + z;
+  const int idx01 = d * (y0 * w + x1) + z;
+  const int idx10 = d * (y1 * w + x0) + z;
+  const int idx11 = d * (y1 * w + x1) + z;
+
+  const float r0 = lerp(img[idx00], img[idx01], xfrac);
+  const float r1 = lerp(img[idx10], img[idx11], xfrac);
+
+  return lerp(r0, r1, yfrac);
+}
+
+void DecodeSegmentation(const float* part_heatmap, const float* raw_segments, unsigned char* decoded) {
+  const int image_size_y = HEIGHT_FULL;
+  const int image_size_x = WIDTH_FULL;
+  const int model_size_y = HEIGHT_SMALL;
+  const int model_size_x = WIDTH_SMALL;
+
+  for (int row = 0; row < image_size_y; ++row) {
+    for (int col = 0; col < image_size_x; ++col) {
+      const float y = (row + 0.5) / image_size_y * model_size_y;
+      const float x = (col + 0.5) / image_size_x * model_size_x;
+      const float segment_val = 
+          BilinearSample(raw_segments, x, y, 0, model_size_x, model_size_y, 1);
+      *decoded = 0;
+      if (segment_val >= -0.4f) {
+        float curr_max = -1.e7;
+        int curr_max_index = -1;
+        for (int part = 0; part < NUM_CLASSES; ++part) {
+          const float val = BilinearSample(part_heatmap, x, y, part, model_size_x, model_size_y, NUM_CLASSES);
+          if (val > curr_max) {
+            curr_max = val;
+            curr_max_index = part;
+          }
+        }
+        *decoded = curr_max_index + 1;
+      }
+      decoded++;
+    }
+
+  }
+}
+
+void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoint* output_coords) {
+  float maxvals[NUM_KEYPOINTS] = {};
+  for (int k = 0; k < NUM_KEYPOINTS; ++k) {
+    maxvals[k] = -1e7f;
+  }
+  int coords[NUM_KEYPOINTS][2] = {};
+  const float* heat = point_heatmaps;
+  for (int i = 0; i < HEIGHT_SMALL; ++i) {
+    for (int j = 0; j < WIDTH_SMALL; ++j) {
+      for (int k = 0; k < NUM_KEYPOINTS; ++k) {
+        if (*heat > maxvals[k]) {
+          maxvals[k] = *heat;
+          coords[k][0] = i;
+          coords[k][0] = j;
+        }
+        heat++;
+      }
+    }
+  }
+
+  View<float> offset_view(point_offsets, HEIGHT_SMALL, WIDTH_SMALL, NUM_KEYPOINTS);
+  Keypoint* out = output_coords;
+  for (int keypoint = 0; keypoint < NUM_KEYPOINTS; ++keypoint) {
+    int i = coords[keypoint][0];
+    int j = coords[keypoint][1];
+    const float y_offset = offset_view(i, j, keypoint);
+    const float x_offset = offset_view(i, j, NUM_KEYPOINTS + keypoint);
+    float final_y = i / (HEIGHT_SMALL - 1.f) * HEIGHT_FULL + y_offset;
+    float final_x = j / (WIDTH_SMALL - 1.f) * WIDTH_FULL + x_offset;
+    out->y = final_y;
+    out->x = final_x;
+    out->confidence = maxvals[keypoint];
+    out++;
+  }
 }
 
 ::mediapipe::Status PoseNetTensorsToDetectionsCalculator::ProcessCPU(
@@ -257,7 +385,7 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
       cc->Inputs().Tag("TENSORS").Get<std::vector<TfLiteTensor>>();
 
   __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", 
-    "input_tensors.size() %d ", input_tensors.size());  
+    "input_tensors.size() %lu ", input_tensors.size());  
   if (input_tensors.size() == 2) {
     // Postprocessing on CPU for model without postprocessing op. E.g. output
     // raw score tensor and box tensor. Anchor decoding will be handled below.
@@ -338,7 +466,7 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
     RET_CHECK_EQ(input_tensors.size(), 4);
 
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 000");  
-    const TfLiteTensor* detection_boxes_tensor = &input_tensors[0];
+    /*const TfLiteTensor* detection_boxes_tensor = &input_tensors[0];
     const TfLiteTensor* detection_classes_tensor = &input_tensors[1];
     const TfLiteTensor* detection_scores_tensor = &input_tensors[2];
     const TfLiteTensor* num_boxes_tensor = &input_tensors[3];
@@ -347,59 +475,91 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->dims->size - %d ", detection_boxes_tensor->dims->data[0]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->dims->size - %d ", detection_boxes_tensor->dims->data[1]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->dims->size - %d ", detection_boxes_tensor->dims->data[2]);  
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->dims->size - %d ", detection_boxes_tensor->dims->data[3]);  
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->dims->size - %d ", detection_boxes_tensor->dims->data[3]);
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->is_var - %s ", detection_boxes_tensor->is_variable ? "true" : "false");
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->type - %d ", detection_boxes_tensor->type); 
 
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->dims->size - %d ", detection_classes_tensor->dims->size);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->dims->size - %d ", detection_classes_tensor->dims->data[0]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->dims->size - %d ", detection_classes_tensor->dims->data[1]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->dims->size - %d ", detection_classes_tensor->dims->data[2]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->dims->size - %d ", detection_classes_tensor->dims->data[3]); 
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->type - %d ", detection_classes_tensor->type); 
 
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->dims->size - %d ", detection_scores_tensor->dims->size);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->dims->size - %d ", detection_scores_tensor->dims->data[0]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->dims->size - %d ", detection_scores_tensor->dims->data[1]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->dims->size - %d ", detection_scores_tensor->dims->data[2]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->dims->size - %d ", detection_scores_tensor->dims->data[3]); 
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->type - %d ", detection_scores_tensor->type); 
 
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->size);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->data[0]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->data[1]);  
     __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->data[2]);  
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->data[3]);  
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->size - %d ", num_boxes_tensor->dims->data[3]); 
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->type - %d ", num_boxes_tensor->type);  
 
 
-    RET_CHECK_EQ(num_boxes_tensor->dims->size, 1);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->dims->data[0] - %d ", num_boxes_tensor->dims->data[0]);  
-    RET_CHECK_EQ(num_boxes_tensor->dims->data[0], 1);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 001");  
-    const float* num_boxes = num_boxes_tensor->data.f;
-    num_boxes_ = num_boxes[0];
-    RET_CHECK_EQ(detection_boxes_tensor->dims->size, 3);
-    RET_CHECK_EQ(detection_boxes_tensor->dims->data[0], 1);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 002");  
-    const int max_detections = detection_boxes_tensor->dims->data[1];
-    RET_CHECK_EQ(detection_boxes_tensor->dims->data[2], num_coords_);
-    RET_CHECK_EQ(detection_classes_tensor->dims->size, 2);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 003");  
-    RET_CHECK_EQ(detection_classes_tensor->dims->data[0], 1);
-    RET_CHECK_EQ(detection_classes_tensor->dims->data[1], max_detections);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 004");  
-    RET_CHECK_EQ(detection_scores_tensor->dims->size, 2);
-    RET_CHECK_EQ(detection_scores_tensor->dims->data[0], 1);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed check 005");  
-    RET_CHECK_EQ(detection_scores_tensor->dims->data[1], max_detections);
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "Passed all the checks");  
-
-    const float* detection_boxes = detection_boxes_tensor->data.f;
-    const float* detection_scores = detection_scores_tensor->data.f;
-    std::vector<int> detection_classes(num_boxes_);
-    for (int i = 0; i < num_boxes_; ++i) {
-      detection_classes[i] =
-          static_cast<int>(detection_classes_tensor->data.f[i]);
+    for (int i = 0; i < 9 * 9 * 17; ++i) {
+      if (i % 17 == 0) {
+        __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "----------------------");  
+      }
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_boxes_tensor->data - %f ", detection_boxes_tensor->data.f[i]);
     }
-    RETURN_IF_ERROR(ConvertToDetections(detection_boxes, detection_scores,
-                                        detection_classes.data(),
-                                        output_detections));
+    for (int i = 0; i < 9 * 9 * 17; ++i) {
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_classes_tensor->data - %f ", detection_classes_tensor->data.f[i]);
+    }
+    for (int i = 0; i < 9 * 9 * 17; ++i) {
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "detection_scores_tensor->data - %f ", detection_scores_tensor->data.f[i]);
+    }
+    for (int i = 0; i < 9 * 9 * 17; ++i) {
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "num_boxes_tensor->data - %f ", num_boxes_tensor->data.f[i]);
+    }*/ 
+
+    const TfLiteTensor* part_heatmap_tensor = &input_tensors[0];
+    const TfLiteTensor* point_heatmap_tensor = &input_tensors[1];
+    const TfLiteTensor* point_offsets_tensor = &input_tensors[2];
+    const TfLiteTensor* raw_segment_tensor = &input_tensors[3];
+    const float* part_heatmap = reinterpret_cast<const float*>(part_heatmap_tensor->data.raw);
+    const float* point_heatmap = reinterpret_cast<const float*>(point_heatmap_tensor->data.raw);
+    const float* point_offsets = reinterpret_cast<const float*>(point_offsets_tensor->data.raw);
+    const float* raw_segment = reinterpret_cast<const float*>(raw_segment_tensor->data.raw);
+
+    std::unique_ptr<ImageFrame> segmentation_frame = 
+        absl::make_unique<ImageFrame>(ImageFormat::GRAY8, WIDTH_FULL, HEIGHT_FULL);
+    uchar* segmentation_ptr = segmentation_frame->MutablePixelData();
+    DecodeSegmentation(part_heatmap, raw_segment, segmentation_ptr);
+
+    std::unique_ptr<std::vector<Keypoint>> keypoints_vec = 
+        absl::make_unique<std::vector<Keypoint>>(NUM_KEYPOINTS);
+    DecodePose(point_heatmap, point_offsets, keypoints_vec->data());
+
+    if (cc->Outputs().HasTag("VIZ")) {
+      uchar* seg_ptr = segmentation_frame->MutablePixelData();
+      std::unique_ptr<ImageFrame> viz_output = 
+          absl::make_unique<ImageFrame>(ImageFormat::SRGBA, WIDTH_FULL, HEIGHT_FULL);
+      uchar* viz_ptr = viz_output->MutablePixelData();
+      const int scale = 255 / NUM_CLASSES;
+      for (int row = 0; row < HEIGHT_FULL; ++row) {
+        for (int col = 0; col < WIDTH_FULL; ++col) {
+          uchar pix = *seg_ptr++;
+          for (int c = 0; c < 3; ++c) {
+            *viz_ptr++ = pix * scale;
+          }
+          *viz_ptr++ = 255;
+        }
+      }
+      cc->Outputs().Tag("VIZ").Add(viz_output.release(), cc->InputTimestamp());
+    }
+
+    if (cc->Outputs().HasTag("SEGMENTATION")) {
+      cc->Outputs().Tag("SEGMENTATION").Add(segmentation_frame.release(), cc->InputTimestamp());
+    }
+    if (cc->Outputs().HasTag("KEYPOINTS")) {
+      cc->Outputs().Tag("KEYPOINTS").Add(keypoints_vec.release(), cc->InputTimestamp());
+    }
+
   }
   return ::mediapipe::OkStatus();
 }

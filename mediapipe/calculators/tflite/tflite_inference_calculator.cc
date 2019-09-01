@@ -25,6 +25,7 @@
 #include "tensorflow/lite/model.h"
 
 #if defined(__ANDROID__)
+#include <android/log.h>
 #include "mediapipe/gpu/gl_calculator_helper.h"
 #include "mediapipe/gpu/gpu_buffer.h"
 #include "tensorflow/lite/delegates/gpu/gl/gl_buffer.h"
@@ -217,7 +218,9 @@ REGISTER_CALCULATOR(TfLiteInferenceCalculator);
 #endif
   }
 
+  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "tensor_inference open 001");
   RETURN_IF_ERROR(LoadModel(cc));
+  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "tensor_inference open 002");
 
   if (gpu_inference_) {
 #if defined(__ANDROID__)
@@ -240,6 +243,8 @@ REGISTER_CALCULATOR(TfLiteInferenceCalculator);
 #if defined(__ANDROID__)
     const auto& input_tensors =
         cc->Inputs().Tag("TENSORS_GPU").Get<std::vector<GpuTensor>>();
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "tensor_inference process 001");
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "input_tensors.size() = %lu", input_tensors.size());
     RET_CHECK_EQ(input_tensors.size(), 1);
     RETURN_IF_ERROR(gpu_helper_.RunInGlContext(
         [this, &input_tensors]() -> ::mediapipe::Status {

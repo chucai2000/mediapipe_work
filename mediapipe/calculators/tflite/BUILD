@@ -368,6 +368,8 @@ cc_library(
         "//mediapipe/framework/formats:location",
         "//mediapipe/framework/formats/object_detection:anchor_cc_proto",
         "//mediapipe/framework/port:ret_check",
+        "//mediapipe/framework/formats:image_frame",
+        "//mediapipe/framework/formats:image_frame_opencv",
         "@org_tensorflow//tensorflow/lite:framework",
     ] + select({
         "//mediapipe:android": [
