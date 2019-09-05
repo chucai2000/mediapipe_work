@@ -370,6 +370,7 @@ cc_library(
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/formats:image_frame",
         "//mediapipe/framework/formats:image_frame_opencv",
+        "//mediapipe/util:annotation_renderer",
         "@org_tensorflow//tensorflow/lite:framework",
     ] + select({
         "//mediapipe:android": [
@@ -383,7 +384,6 @@ cc_library(
     }),
     alwayslink = 1,
 )
-
 
 cc_library(
     name = "tflite_tensors_to_landmarks_calculator",

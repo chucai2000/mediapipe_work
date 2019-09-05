@@ -27,6 +27,7 @@
 #include "tensorflow/lite/interpreter.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
+#include "mediapipe/util/annotation_renderer.h"
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -83,6 +84,8 @@ const int WIDTH_SMALL = 33;
 const int HEIGHT_SMALL = 45;
 const int NUM_KEYPOINTS = 17;
 const int NUM_CLASSES = 24;
+const int WIDTH_ORIG = 1440;
+const int HEIGHT_ORIG = 2560;
 
 template <class T>
 class View {
@@ -206,6 +209,9 @@ REGISTER_CALCULATOR(PoseNetTensorsToDetectionsCalculator);
     cc->Inputs().Tag("TENSORS_GPU").Set<std::vector<GlBuffer>>();
   }
 #endif
+  if (cc->Outputs().HasTag("RENDER_DATA")) {
+    cc->Outputs().Tag("RENDER_DATA").Set<RenderData>();
+  }
 
   //if (cc->Outputs().HasTag("DETECTIONS")) {
   //  cc->Outputs().Tag("DETECTIONS").Set<std::vector<Detection>>();
@@ -356,7 +362,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
         if (*heat > maxvals[k]) {
           maxvals[k] = *heat;
           coords[k][0] = i;
-          coords[k][0] = j;
+          coords[k][1] = j;
         }
         heat++;
       }
@@ -540,6 +546,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
       std::unique_ptr<ImageFrame> viz_output = 
           absl::make_unique<ImageFrame>(ImageFormat::SRGBA, WIDTH_FULL, HEIGHT_FULL);
       uchar* viz_ptr = viz_output->MutablePixelData();
+
       const int scale = 255 / NUM_CLASSES;
       for (int row = 0; row < HEIGHT_FULL; ++row) {
         for (int col = 0; col < WIDTH_FULL; ++col) {
@@ -550,7 +557,64 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
           *viz_ptr++ = 255;
         }
       }
+
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "keypoint size %d ", keypoints_vec->size());
+      uchar* viz_start_ptr = viz_output->MutablePixelData();
+      for (int k = 0; k < keypoints_vec->size(); ++k) {
+        // Skip the non confident keypoints.
+        if (keypoints_vec->at(k).confidence <= 1.5) continue;
+
+        int k_col = static_cast<int>(keypoints_vec->at(k).x);
+        int k_row = static_cast<int>(keypoints_vec->at(k).y);
+        int radius = 2;
+        for (int row = k_row - radius; row <= k_row + radius; ++row) {
+          for (int col = k_col - radius; col <= k_col + radius; ++col) {
+            int real_row = std::min(std::max(0, row), HEIGHT_FULL-1);
+            int real_col = std::min(std::max(0, col), WIDTH_FULL-1);
+
+            viz_start_ptr[(real_row * WIDTH_FULL + real_col) * 4] = 255;
+            viz_start_ptr[(real_row * WIDTH_FULL + real_col) * 4 + 1] = 255;
+            viz_start_ptr[(real_row * WIDTH_FULL + real_col) * 4 + 2] = 102;
+            viz_start_ptr[(real_row * WIDTH_FULL + real_col) * 4 + 3] = 255;
+          }
+        }
+        // __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "keypoint score %.3f ", keypoints_vec->at(k).confidence);
+      }
+
       cc->Outputs().Tag("VIZ").Add(viz_output.release(), cc->InputTimestamp());
+    }
+
+    if (cc->Outputs().HasTag("RENDER_DATA")) {
+      auto render_data = absl::make_unique<RenderData>();
+      int radius = 5;
+      for (int k = 0; k < keypoints_vec->size(); ++k) {
+        // Skip the non confident keypoints.
+        if (keypoints_vec->at(k).confidence <= 1.5) continue;
+
+        __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "keypoint score %.3f ", keypoints_vec->at(k).confidence);
+
+        int k_col = static_cast<int>(keypoints_vec->at(k).x / WIDTH_FULL * WIDTH_ORIG);
+        int k_row = static_cast<int>(keypoints_vec->at(k).y / HEIGHT_FULL * HEIGHT_ORIG);
+        //int k_col = 1000;
+        //int k_row = 1000;
+        __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "k_col %d, k_row %d ", k_col, k_row);
+
+        auto *location_data_annotation = render_data->add_render_annotations();
+        auto *location_data_rect = location_data_annotation->mutable_rectangle();
+        location_data_rect->set_left(std::max(0, k_col - radius));
+        location_data_rect->set_top(std::max(0, k_row - radius));
+        location_data_rect->set_right(std::min(HEIGHT_ORIG-1, k_col + radius));
+        location_data_rect->set_bottom(std::min(WIDTH_ORIG-1, k_row + radius));
+
+        location_data_annotation->mutable_color()->set_r(255);
+        location_data_annotation->mutable_color()->set_g(255);
+        location_data_annotation->mutable_color()->set_b(102);
+        location_data_annotation->set_thickness(3);
+      }
+
+      cc->Outputs()
+              .Tag("RENDER_DATA")
+              .Add(render_data.release(), cc->InputTimestamp());
     }
 
     if (cc->Outputs().HasTag("SEGMENTATION")) {
