@@ -41,8 +41,7 @@ public class MainActivity extends AppCompatActivity {
       private static final String BINARY_GRAPH_NAME = "posedetectiongpu.binarypb";
       private static final String INPUT_VIDEO_STREAM_NAME = "input_video";
       private static final String OUTPUT_VIDEO_STREAM_NAME = "output_video";
-      private static final CameraHelper.CameraFacing CAMERA_FACING = CameraHelper.CameraFacing.FRONT;
-
+      private static final CameraHelper.CameraFacing CAMERA_POSENET = CameraHelper.CameraFacing.BACK;
 
       static {
         // Load all native libraries needed by the app.
@@ -159,6 +158,6 @@ public class MainActivity extends AppCompatActivity {
               // SurfaceHolder.Callback added to (the holder of) previewDisplayView.
               previewDisplayView.setVisibility(View.VISIBLE);
             });
-        cameraHelper.startCamera(this, CAMERA_FACING, /*surfaceTexture=*/ null);
+        cameraHelper.startCamera(this, CAMERA_POSENET, /*surfaceTexture=*/ null);
   }
 }

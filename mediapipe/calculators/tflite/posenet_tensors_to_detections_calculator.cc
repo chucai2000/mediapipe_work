@@ -390,6 +390,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
   const auto& input_tensors =
       cc->Inputs().Tag("TENSORS").Get<std::vector<TfLiteTensor>>();
 
+  int model_version = 1;
   __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", 
     "input_tensors.size() %lu ", input_tensors.size());  
   if (input_tensors.size() == 2) {
@@ -466,7 +467,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
     RETURN_IF_ERROR(ConvertToDetections(boxes.data(), detection_scores.data(),
                                         detection_classes.data(),
                                         output_detections));
-  } else {
+  } else if (model_version == 0) {
     // Postprocessing on CPU with postprocessing op (e.g. anchor decoding and
     // non-maximum suppression) within the model.
     RET_CHECK_EQ(input_tensors.size(), 4);
@@ -624,6 +625,90 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
       cc->Outputs().Tag("KEYPOINTS").Add(keypoints_vec.release(), cc->InputTimestamp());
     }
 
+  } else if (model_version == 1) {
+    const TfLiteTensor* heatmap_tensor = &input_tensors[0];
+    const TfLiteTensor* offset_tensor = &input_tensors[1];
+    const float* heatmap = reinterpret_cast<const float*>(heatmap_tensor->data.raw);
+    const float* offsetmap = reinterpret_cast<const float*>(offset_tensor->data.raw);
+
+    /*const TfLiteTensor* outputlog_tensor = offset_tensor;
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "outputlog_tensor->dims->size - %d ", outputlog_tensor->dims->size);
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "outputlog_tensor->dims->size - %d ", outputlog_tensor->dims->data[0]);
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "outputlog_tensor->dims->size - %d ", outputlog_tensor->dims->data[1]);
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "outputlog_tensor->dims->size - %d ", outputlog_tensor->dims->data[2]);
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "outputlog_tensor->dims->size - %d ", outputlog_tensor->dims->data[3]);*/
+
+    const int kOutputStride = 32;
+    const int kImageWidth = 257;
+    const int kImageHeight = 257;
+    const int kOrigImageWidth = 257;
+    const int kOrigImageHeight = 257;
+    const int kHeatMapWidth = 9;
+    const int kHeatMapHeight = 9;
+    const int kOffsetMapWidth = 9;
+    const int kOffsetMapHeight = 9;
+    const int kNumLayers = 17;
+    const int kOffsetLayers = kNumLayers * 2;
+
+    std::vector<std::pair<int, int>> max_heatmap_positions(kNumLayers);
+    std::vector<std::pair<int, int>> key_points_of_all_parts(kNumLayers);
+    for (int k = 0; k < kNumLayers; ++k) {
+      float max_value = std::numeric_limits<float>::lowest();
+      std::pair<int, int> max_pos = {-1, -1};
+      for (int i = 0; i < kHeatMapHeight; ++i) {
+        for (int j = 0; j < kHeatMapWidth; ++j) {
+          // (i, j, k) -> (i * kHeatMapWidth + j) * kNumLayers + k
+          int index = (i * kHeatMapWidth + j) * kNumLayers + k;
+          //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "heat_map index %d, value %.4f", index, heatmap[index]);
+          if (heatmap[index] > max_value) {
+            max_value = heatmap[index];
+            max_pos = std::make_pair(i, j);
+          }
+        }
+      }
+      max_heatmap_positions[k] = max_pos;
+
+      int heat_y = max_pos.first;
+      int heat_x = max_pos.second;
+      int offset_y_index = (heat_y * kOffsetMapWidth + heat_x) * kOffsetLayers + k;
+      int offset_x_index = (heat_y * kOffsetMapWidth + heat_x) * kOffsetLayers + k + 17;
+
+      int keypoint_y = static_cast<int>(heat_y * kOutputStride + offsetmap[offset_y_index]);
+      int keypoint_x = static_cast<int>(heat_x * kOutputStride + offsetmap[offset_x_index]);
+      key_points_of_all_parts[k] = {keypoint_y, keypoint_x};
+      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "scaled_image_keypoint k = %d, y = %d, x = %d, heat_y = %d, heat_x = %d", k, keypoint_y, keypoint_x, heat_y, heat_x);
+    }
+
+    if (cc->Outputs().HasTag("RENDER_DATA")) {
+      auto render_data = absl::make_unique<RenderData>();
+      int radius = 2;
+      for (int k = 0; k < kNumLayers; ++k) {
+        // Skip the non confident keypoints.
+        //if (keypoints_vec->at(k).confidence <= 1.5) continue;
+
+        //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "keypoint score %.3f ", keypoints_vec->at(k).confidence);
+
+        int k_col = static_cast<int>(1.f * key_points_of_all_parts.at(k).second / kImageWidth * kOrigImageWidth);
+        int k_row = static_cast<int>(1.f * key_points_of_all_parts.at(k).first / kImageHeight * kOrigImageHeight);
+        __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "orig_image_keypoint k %d, k_col %d, k_row %d ", k, k_col, k_row);
+
+        auto *location_data_annotation = render_data->add_render_annotations();
+        auto *location_data_rect = location_data_annotation->mutable_rectangle();
+        location_data_rect->set_left(std::max(0, k_col - radius));
+        location_data_rect->set_top(std::max(0, k_row - radius));
+        location_data_rect->set_right(std::min(kOrigImageHeight-1, k_col + radius));
+        location_data_rect->set_bottom(std::min(kOrigImageWidth-1, k_row + radius));
+
+        location_data_annotation->mutable_color()->set_r(255);
+        location_data_annotation->mutable_color()->set_g(255);
+        location_data_annotation->mutable_color()->set_b(102);
+        location_data_annotation->set_thickness(3);
+      }
+
+      cc->Outputs()
+        .Tag("RENDER_DATA")
+        .Add(render_data.release(), cc->InputTimestamp());
+    }
   }
   return ::mediapipe::OkStatus();
 }

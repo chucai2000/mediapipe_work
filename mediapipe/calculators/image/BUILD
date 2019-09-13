@@ -390,6 +390,20 @@ cc_library(
 )
 
 cc_library(
+    name = "color_correction_gpu_calculator",
+    srcs = ["color_correction_gpu_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/framework/port:ret_check",
+        "//mediapipe/framework/port:status",
+        "//mediapipe/gpu:gl_simple_calculator",
+        "//mediapipe/gpu:gl_simple_shaders",
+        "//mediapipe/gpu:shader_util",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "sobel_edges_calculator",
     srcs = ["sobel_edges_calculator.cc"],
     visibility = ["//visibility:public"],
