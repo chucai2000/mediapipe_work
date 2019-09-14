@@ -24,6 +24,10 @@
 
 #include "mediapipe/gpu/gl_calculator_helper.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace mediapipe {
 
 // Convert an input image (GpuBuffer or ImageFrame) to ImageFrame.
@@ -81,7 +85,8 @@ REGISTER_CALCULATOR(GpuBufferToImageFrameCalculator);
         CreateImageFrameForCVPixelBuffer(input.GetCVPixelBufferRef());
     cc->Outputs().Index(0).Add(frame.release(), cc->InputTimestamp());
 #else
-    helper_.RunInGlContext([this, &input, &cc]() {
+    std::string output_str;
+    helper_.RunInGlContext([this, &input, &cc, &output_str]() {
       auto src = helper_.CreateSourceTexture(input);
       std::unique_ptr<ImageFrame> frame = absl::make_unique<ImageFrame>(
           ImageFormatForGpuBufferFormat(input.format()), src.width(),
@@ -90,10 +95,17 @@ REGISTER_CALCULATOR(GpuBufferToImageFrameCalculator);
       const auto info = GlTextureInfoForGpuBufferFormat(input.format(), 0);
       glReadPixels(0, 0, src.width(), src.height(), info.gl_format,
                    info.gl_type, frame->MutablePixelData());
+
+      for (int i = 0; i < 10280; ++i) {
+        output_str += std::to_string(frame->MutablePixelData()[i]);
+        output_str += " ";
+      }
+
       glFlush();
       cc->Outputs().Index(0).Add(frame.release(), cc->InputTimestamp());
       src.Release();
     });
+    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "ImageFrame11 Data %s", output_str.c_str());
 #endif  // MEDIAPIPE_GPU_BUFFER_USE_CV_PIXEL_BUFFER
     return ::mediapipe::OkStatus();
   }

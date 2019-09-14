@@ -21,6 +21,10 @@
 #include "mediapipe/objc/util.h"
 #endif
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace mediapipe {
 
 // Convert ImageFrame to GpuBuffer.
@@ -72,6 +76,17 @@ REGISTER_CALCULATOR(ImageFrameToGpuBufferCalculator);
   cc->Outputs().Index(0).Add(new GpuBuffer(buffer), cc->InputTimestamp());
 #else
   const auto& input = cc->Inputs().Index(0).Get<ImageFrame>();
+  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "ImageFrame %d, %d, %d, %d %d ", input.Width(), input.Height(), input.ByteDepth(), input.WidthStep(), input.PixelDataSize());
+  const uint8* p = input.PixelData();
+  std::string output_str;
+  for (int r = 0; r < 10; ++r) {
+    for (int c = 0; c < 257; ++c) {
+      output_str += std::to_string(p[r * input.WidthStep() + c]);
+      output_str += " ";
+    }
+  }
+  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "ImageFrame22 Data %s", output_str.c_str());
+
   helper_.RunInGlContext([this, &input, &cc]() {
     auto src = helper_.CreateSourceTexture(input);
     auto output = src.GetFrame<GpuBuffer>();

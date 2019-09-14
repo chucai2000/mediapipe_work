@@ -699,9 +699,19 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
         location_data_rect->set_right(std::min(kOrigImageHeight-1, k_col + radius));
         location_data_rect->set_bottom(std::min(kOrigImageWidth-1, k_row + radius));
 
-        location_data_annotation->mutable_color()->set_r(255);
-        location_data_annotation->mutable_color()->set_g(255);
-        location_data_annotation->mutable_color()->set_b(102);
+        if (k == 0) {
+          location_data_annotation->mutable_color()->set_r(255);
+          location_data_annotation->mutable_color()->set_g(0);
+          location_data_annotation->mutable_color()->set_b(0);
+        } else if (k == 1) {
+          location_data_annotation->mutable_color()->set_r(0);
+          location_data_annotation->mutable_color()->set_g(255);
+          location_data_annotation->mutable_color()->set_b(0);
+        } else {
+          location_data_annotation->mutable_color()->set_r(255);
+          location_data_annotation->mutable_color()->set_g(255);
+          location_data_annotation->mutable_color()->set_b(102);
+        }
         location_data_annotation->set_thickness(3);
       }
 

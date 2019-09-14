@@ -48,3 +48,10 @@ mediapipe_binary_graph(
     output_name = "mobile_gpu.binarypb",
     deps = [":mobile_calculators"],
 )
+
+mediapipe_binary_graph(
+    name = "mobile_cpu_binary_graph",
+    graph = "pose_detection_mobile_cpu.pbtxt",
+    output_name = "mobile_cpu.binarypb",
+    deps = [":mobile_calculators"],
+)
