@@ -37,14 +37,6 @@ node: {
   output_stream: "input_video_cpu"
 }
 
-# Color correction on GPU.
-#node {
-  ##calculator: "LuminanceCalculator"
-  #calculator: "ColorCorrectionGpuCalculator"
-  #input_stream: "VIDEO:input_video_cpu"
-  #output_stream: "VIDEO:throttled_corrected_input_video"
-#}
-
 # Transforms the input image on GPU to a small image. To scale the input
 # image, the scale_mode option is set to FIT to preserve the aspect ratio,
 # resulting in potential letterboxing in the transformed image.
@@ -61,18 +53,6 @@ node: {
     }
   }
 }
-
-#node {
-#  calculator: "GpuBufferToImageFrameCalculator"
-#  input_stream: "transformed_input_video"
-#  output_stream: "transformed_input_video_cpu"
-#}
-
-#node {
-#  calculator: "ImageFrameToGpuBufferCalculator"
-#  input_stream: "transformed_input_video_cpu"
-#  output_stream: "transformed_input_video_gpu_not_used"
-#}
 
 # Converts the transformed input image on GPU into an image tensor stored as a
 # TfLiteTensor.
@@ -104,16 +84,7 @@ node {
   calculator: "PoseNetTensorsToDetectionsCalculator"
   input_stream: "TENSORS:detection_tensors"
   output_stream: "RENDER_DATA:render_data"
-  #output_stream: "VIZ:rendered_frames"
-  #output_stream: "SEGMENTATION:segmentation"
-  #output_stream: "KEYPOINTS:keypoints"
 }
-
-#node {
-#  calculator: "ImageFrameToGpuBufferCalculator"
-#  input_stream: "rendered_frames"
-#  output_stream: "output_video"
-#}
 
 # Draws annotations and overlays them on top of the input images.
 node {

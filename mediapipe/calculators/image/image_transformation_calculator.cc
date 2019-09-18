@@ -375,13 +375,13 @@ REGISTER_CALCULATOR(ImageTransformationCalculator);
 #if defined(__ANDROID__) || defined(__APPLE__) && !TARGET_OS_OSX
   int input_width = cc->Inputs().Tag("IMAGE_GPU").Get<GpuBuffer>().width();
   int input_height = cc->Inputs().Tag("IMAGE_GPU").Get<GpuBuffer>().height();
-  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "input_width %d, input_height %d", input_width, input_height);
+  // __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "input_width %d, input_height %d", input_width, input_height);
 
   int output_width;
   int output_height;
   ComputeOutputDimensions(input_width, input_height, &output_width,
                           &output_height);
-  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "output_width %d, output_height %d", output_width, output_height);  
+  // __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "output_width %d, output_height %d", output_width, output_height);
 
   if (cc->Outputs().HasTag("LETTERBOX_PADDING")) {
     auto padding = absl::make_unique<std::array<float, 4>>();

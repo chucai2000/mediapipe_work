@@ -391,8 +391,8 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
       cc->Inputs().Tag("TENSORS").Get<std::vector<TfLiteTensor>>();
 
   int model_version = 1;
-  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", 
-    "input_tensors.size() %lu ", input_tensors.size());  
+  //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc",
+  //  "input_tensors.size() %lu ", input_tensors.size());
   if (input_tensors.size() == 2) {
     // Postprocessing on CPU for model without postprocessing op. E.g. output
     // raw score tensor and box tensor. Anchor decoding will be handled below.
@@ -676,7 +676,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
       int keypoint_y = static_cast<int>(heat_y * kOutputStride + offsetmap[offset_y_index]);
       int keypoint_x = static_cast<int>(heat_x * kOutputStride + offsetmap[offset_x_index]);
       key_points_of_all_parts[k] = {keypoint_y, keypoint_x};
-      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "scaled_image_keypoint k = %d, y = %d, x = %d, heat_y = %d, heat_x = %d", k, keypoint_y, keypoint_x, heat_y, heat_x);
+      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "scaled_image_keypoint k = %d, y = %d, x = %d, heat_y = %d, heat_x = %d", k, keypoint_y, keypoint_x, heat_y, heat_x);
     }
 
     if (cc->Outputs().HasTag("RENDER_DATA")) {
@@ -690,7 +690,7 @@ void DecodePose(const float* point_heatmaps, const float* point_offsets, Keypoin
 
         int k_col = static_cast<int>(1.f * key_points_of_all_parts.at(k).second / kImageWidth * kOrigImageWidth);
         int k_row = static_cast<int>(1.f * key_points_of_all_parts.at(k).first / kImageHeight * kOrigImageHeight);
-        __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "orig_image_keypoint k %d, k_col %d, k_row %d ", k, k_col, k_row);
+        //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "orig_image_keypoint k %d, k_col %d, k_row %d ", k, k_col, k_row);
 
         auto *location_data_annotation = render_data->add_render_annotations();
         auto *location_data_rect = location_data_annotation->mutable_rectangle();
