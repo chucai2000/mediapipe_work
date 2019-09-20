@@ -30,6 +30,8 @@ cc_library(
         "//mediapipe/calculators/util:detection_letterbox_removal_calculator",
         "//mediapipe/calculators/util:detections_to_render_data_calculator",
         "//mediapipe/calculators/util:non_max_suppression_calculator",
+        "//mediapipe/calculators/util:pose_detection_letterbox_removal_calculator",
+        "//mediapipe/calculators/util:sync_detections_calculator",
         "//mediapipe/gpu:gpu_buffer_to_image_frame_calculator",
         "//mediapipe/gpu:image_frame_to_gpu_buffer_calculator",
     ],
@@ -51,5 +53,12 @@ mediapipe_binary_graph(
     name = "mobile_gpu_binary_graph",
     graph = "face_detection_mobile_gpu.pbtxt",
     output_name = "mobile_gpu.binarypb",
+    deps = [":mobile_calculators"],
+)
+
+mediapipe_binary_graph(
+    name = "face_and_pose_graph",
+    graph = "face_and_pose.pbtxt",
+    output_name = "face_and_pose.binarypb",
     deps = [":mobile_calculators"],
 )

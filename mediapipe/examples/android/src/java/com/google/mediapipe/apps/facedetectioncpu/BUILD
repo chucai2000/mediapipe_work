@@ -37,8 +37,8 @@ cc_library(
 # MainActivity.BINARY_GRAPH_NAME = "appname.binarypb".
 genrule(
     name = "binary_graph",
-    srcs = ["//mediapipe/graphs/face_detection:mobile_cpu_binary_graph"],
-    outs = ["facedetectioncpu.binarypb"],
+    srcs = ["//mediapipe/graphs/face_detection:face_and_pose_graph"],
+    outs = ["face_and_pose.binarypb"],
     cmd = "cp $< $@",
 )
 
@@ -49,6 +49,7 @@ android_library(
         ":binary_graph",
         "//mediapipe/models:face_detection_front.tflite",
         "//mediapipe/models:face_detection_front_labelmap.txt",
+        "//mediapipe/models:posenet_mobilenet_v1_100_257x257_multi_kpt_stripped.tflite",
     ],
     assets_dir = "",
     manifest = "AndroidManifest.xml",

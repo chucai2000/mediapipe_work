@@ -27,6 +27,10 @@
 #include "mediapipe/framework/port/rectangle.h"
 #include "mediapipe/framework/port/status.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif  // ANDROID
+
 namespace mediapipe {
 
 typedef std::vector<Detection> Detections;

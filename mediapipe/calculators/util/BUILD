@@ -552,6 +552,31 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "sync_detections_calculator",
+    srcs = ["sync_detections_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework:calculator_options_cc_proto",
+        "//mediapipe/framework/deps:file_path",
+        "//mediapipe/framework/formats:detection_cc_proto",
+        "//mediapipe/framework/formats:image_frame",
+        "//mediapipe/framework/formats:image_frame_opencv",
+        "//mediapipe/framework/formats:location",
+        "//mediapipe/framework/formats:location_data_cc_proto",
+        "//mediapipe/framework/formats/object_detection:anchor_cc_proto",
+        "//mediapipe/framework/port:ret_check",
+        "//mediapipe/util:annotation_renderer",
+        "//mediapipe/util:color_cc_proto",
+        "//mediapipe/util:render_data_cc_proto",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/strings",
+        "@org_tensorflow//tensorflow/lite:framework",
+    ],
+    alwayslink = 1,
+)
+
 mediapipe_cc_proto_library(
     name = "landmarks_to_render_data_calculator_cc_proto",
     srcs = ["landmarks_to_render_data_calculator.proto"],
@@ -631,6 +656,21 @@ cc_library(
         "//mediapipe/framework/formats:location",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:status",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "pose_detection_letterbox_removal_calculator",
+    srcs = ["pose_detection_letterbox_removal_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework/formats:detection_cc_proto",
+        "//mediapipe/framework/formats:location",
+        "//mediapipe/framework/port:ret_check",
+        "//mediapipe/framework/port:status",
+        "@org_tensorflow//tensorflow/lite:framework",
     ],
     alwayslink = 1,
 )

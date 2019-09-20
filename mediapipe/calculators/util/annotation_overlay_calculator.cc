@@ -34,6 +34,10 @@
 #include "mediapipe/gpu/shader_util.h"
 #endif  // __ANDROID__ or iOS
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace mediapipe {
 
 namespace {
@@ -274,6 +278,8 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   } else {
     RETURN_IF_ERROR(CreateRenderTargetCpu(cc, image_mat, &target_format));
   }
+
+  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "annotated_image row=%d col=%d", image_mat->rows, image_mat->cols);
 
   // Reset the renderer with the image_mat. No copy here.
   renderer_->AdoptImage(image_mat.get());

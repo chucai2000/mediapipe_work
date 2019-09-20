@@ -23,6 +23,11 @@
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/util/color.pb.h"
 #include "mediapipe/util/render_data.pb.h"
+
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif  // ANDROID
+
 namespace mediapipe {
 
 namespace {
