@@ -129,8 +129,6 @@ class PoseDetectionLetterboxRemovalCalculator : public CalculatorBase {
       detection_pose.mutable_location_data()->mutable_relative_bounding_box()->set_width(0);
       detection_pose.mutable_location_data()->mutable_relative_bounding_box()->set_height(0);
       output_detection_pose->push_back(detection_pose);
-
-      // __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "key_pt k = %d", k);
     }
 
     cc->Outputs()
