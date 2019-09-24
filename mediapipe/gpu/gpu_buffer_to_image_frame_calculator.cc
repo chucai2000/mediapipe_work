@@ -105,7 +105,6 @@ REGISTER_CALCULATOR(GpuBufferToImageFrameCalculator);
       cc->Outputs().Index(0).Add(frame.release(), cc->InputTimestamp());
       src.Release();
     });
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "ImageFrame11 Data %s", output_str.c_str());
 #endif  // MEDIAPIPE_GPU_BUFFER_USE_CV_PIXEL_BUFFER
     return ::mediapipe::OkStatus();
   }

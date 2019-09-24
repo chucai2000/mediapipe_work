@@ -47,6 +47,8 @@ class SyncDetectionsCalculator : public CalculatorBase {
   ::mediapipe::Status ProcessCPU(CalculatorContext* cc,
                                  std::vector<Detection>* output_detections);
 
+  Timestamp prev_output_timestamp_;
+
 };
 REGISTER_CALCULATOR(SyncDetectionsCalculator);
 
@@ -91,40 +93,57 @@ REGISTER_CALCULATOR(SyncDetectionsCalculator);
 
 ::mediapipe::Status SyncDetectionsCalculator::ProcessCPU(
     CalculatorContext* cc, std::vector<Detection>* output_detections) {
-  const auto& input_pose_detections =
-      cc->Inputs().Index(1).Get<std::vector<Detection>>();
 
-  const int kNumLayers = 17;
-  const int kImageWidth = 257;
-  const int kImageHeight = 257;
-  const int kOrigImageWidth = 2560;
-  const int kOrigImageHeight = 1440;
-  std::vector<std::pair<float, float>> key_points_of_all_parts(kNumLayers);
-  RET_CHECK(input_pose_detections.size() == kNumLayers);
-  for (int k = 0; k < kNumLayers; ++k) {
-    key_points_of_all_parts[k] = {
-        input_pose_detections[k].location_data().relative_bounding_box().ymin(),
-        input_pose_detections[k].location_data().relative_bounding_box().xmin()};
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts k = %d, y=%.3f, x=%.3f ",
-        k, key_points_of_all_parts[k].first, key_points_of_all_parts[k].second);
+  __android_log_print(
+    ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator input-time %ld, num_entries=%d",
+    cc->InputTimestamp().Microseconds(), cc->Inputs().NumEntries());
+  if (cc->InputTimestamp() <= prev_output_timestamp_) {
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator skipped.");
+    return ::mediapipe::OkStatus();
   }
 
-  const auto& input_face_detections =
-    cc->Inputs().Index(0).Get<std::vector<Detection>>();
+  std::vector<std::pair<float, float>> key_points_of_all_parts;
+  if (cc->Inputs().NumEntries() >= 2 && !cc->Inputs().Index(1).IsEmpty()) {
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator exist pose");
+    const int kNumLayers = 17;
+    const int kImageWidth = 257;
+    const int kImageHeight = 257;
+    const int kOrigImageWidth = 2560;
+    const int kOrigImageHeight = 1440;
+    const auto& input_pose_detections =
+        cc->Inputs().Index(1).Get<std::vector<Detection>>();
+    RET_CHECK(input_pose_detections.size() == kNumLayers);
+    key_points_of_all_parts.resize(kNumLayers);
+    for (int k = 0; k < kNumLayers; ++k) {
+      key_points_of_all_parts[k] = {
+          input_pose_detections[k].location_data().relative_bounding_box().ymin(),
+          input_pose_detections[k].location_data().relative_bounding_box().xmin()};
+      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts k = %d, y=%.3f, x=%.3f ",
+      //    k, key_points_of_all_parts[k].first, key_points_of_all_parts[k].second);
+    }
+  }
+
   std::vector<std::vector<double>> face_bounding_boxes;
-  for (const auto& face_detection : input_face_detections) {
-    const auto& val = face_detection.location_data().relative_bounding_box();
-    std::vector<double> face_bounding_box = {val.xmin(), val.ymin(), val.width(), val.height()};
-    __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts face, yc=%.3f, xc=%.3f",
-                        val.ymin() + 0.5f * val.height(), val.xmin() + 0.5f * val.width());
-    face_bounding_boxes.emplace_back(face_bounding_box);
+  if (!cc->Inputs().Index(0).IsEmpty()) {
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator exist face");
+    const auto& input_face_detections =
+      cc->Inputs().Index(0).Get<std::vector<Detection>>();
+    for (const auto& face_detection : input_face_detections) {
+      const auto& val = face_detection.location_data().relative_bounding_box();
+      std::vector<double> face_bounding_box = {val.xmin(), val.ymin(), val.width(), val.height()};
+      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts face, yc=%.3f, xc=%.3f",
+      //                    val.ymin() + 0.5f * val.height(), val.xmin() + 0.5f * val.width());
+      face_bounding_boxes.emplace_back(face_bounding_box);
+    }
   }
-
 
   if (cc->Outputs().HasTag("RENDER_DATA")) {
     auto render_data = absl::make_unique<RenderData>();
-    float radius = 0.001;
-    for (int k = 0; k < kNumLayers; ++k) {
+    float radius = 0.01;
+    for (int k = 0; k < key_points_of_all_parts.size(); ++k) {
       //int k_col = static_cast<int>(key_points_of_all_parts.at(k).second * kOrigImageWidth);
       //int k_row = static_cast<int>(key_points_of_all_parts.at(k).first * kOrigImageHeight);
       //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "orig_image_keypoint k %d, k_col %d, k_row %d ", k, k_col, k_row);
@@ -168,6 +187,7 @@ REGISTER_CALCULATOR(SyncDetectionsCalculator);
       face_annotation->set_thickness(3);
     }
 
+    prev_output_timestamp_ = cc->InputTimestamp();
     cc->Outputs()
       .Tag("RENDER_DATA")
       .Add(render_data.release(), cc->InputTimestamp());

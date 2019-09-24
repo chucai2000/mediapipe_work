@@ -424,6 +424,19 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "stream_downsampler_calculator",
+    srcs = ["stream_downsampler_calculator.cc"],
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework/port:ret_check",
+    ],
+    alwayslink = 1,
+)
+
 cc_test(
     name = "packet_resampler_calculator_test",
     timeout = "short",

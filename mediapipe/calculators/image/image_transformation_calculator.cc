@@ -41,6 +41,10 @@ typedef int DimensionsPacketType[2];
 
 #define DEFAULT_SCALE_MODE mediapipe::ScaleMode_Mode_STRETCH
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif  // ANDROID
+
 namespace mediapipe {
 
 #if defined(__ANDROID__) || defined(__APPLE__) && !TARGET_OS_OSX
@@ -264,6 +268,9 @@ REGISTER_CALCULATOR(ImageTransformationCalculator);
 
 ::mediapipe::Status ImageTransformationCalculator::Process(
     CalculatorContext* cc) {
+  __android_log_print(
+    ANDROID_LOG_INFO, "debug_yichuc", "?? ImageTransformationCalculator input-time %ld height=%d,",
+    cc->InputTimestamp().Microseconds(), options_.output_height());
   if (use_gpu_) {
 #if defined(__ANDROID__) || defined(__APPLE__) && !TARGET_OS_OSX
     return helper_.RunInGlContext(

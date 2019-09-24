@@ -58,6 +58,11 @@ class PoseDetectionLetterboxRemovalCalculator : public CalculatorBase {
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) override {
+
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "Pose DetectionLetterboxRemovalCalculator input-time %ld",
+      cc->InputTimestamp().Microseconds());
+
     // Process detected tensors from Posenet.
     const auto& input_pose_tensors =
         cc->Inputs().Tag("TENSORS").Get<std::vector<TfLiteTensor>>();
@@ -114,8 +119,8 @@ class PoseDetectionLetterboxRemovalCalculator : public CalculatorBase {
       int keypoint_y = static_cast<int>(heat_y * kOutputStride + offsetmap[offset_y_index]);
       int keypoint_x = static_cast<int>(heat_x * kOutputStride + offsetmap[offset_x_index]);
       key_points_of_all_parts[k] = {keypoint_y, keypoint_x};
-      __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "absolute_key_points_of_all_parts k = %d, y=%d, x=%d ",
-        k, keypoint_y, keypoint_x);
+      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "absolute_key_points_of_all_parts k = %d, y=%d, x=%d ",
+      //  k, keypoint_y, keypoint_x);
 
       // Assign into output structure.
       float relative_keypoint_x = 1.0f * keypoint_x / kImageWidth;

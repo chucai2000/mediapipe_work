@@ -21,6 +21,10 @@
 #include "mediapipe/framework/port/status.h"
 #include "mediapipe/util/header_util.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace mediapipe {
 
 // FlowLimiterCalculator is used to limit the number of pipelined processing

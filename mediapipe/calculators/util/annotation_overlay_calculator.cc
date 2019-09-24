@@ -212,6 +212,9 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
 
 ::mediapipe::Status AnnotationOverlayCalculator::Open(CalculatorContext* cc) {
   cc->SetOffset(TimestampDiff(0));
+  __android_log_print(
+    ANDROID_LOG_INFO, "debug_yichuc", "?? AnnotationOverlayCalculator open input-time %ld",
+    cc->InputTimestamp().Microseconds());
 
   options_ = cc->Options<AnnotationOverlayCalculatorOptions>();
   if (cc->Inputs().HasTag(kInputFrameTagGpu) &&
@@ -278,8 +281,6 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   } else {
     RETURN_IF_ERROR(CreateRenderTargetCpu(cc, image_mat, &target_format));
   }
-
-  __android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "annotated_image row=%d col=%d", image_mat->rows, image_mat->cols);
 
   // Reset the renderer with the image_mat. No copy here.
   renderer_->AdoptImage(image_mat.get());

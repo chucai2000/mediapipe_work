@@ -39,6 +39,8 @@ genrule(
     name = "binary_graph",
     srcs = ["//mediapipe/graphs/face_detection:face_and_pose_graph"],
     outs = ["face_and_pose.binarypb"],
+    #srcs = ["//mediapipe/graphs/face_detection:mobile_cpu_binary_graph"],
+    #outs = ["mobile_cpu_binary_graph.binarypb"],
     cmd = "cp $< $@",
 )
 

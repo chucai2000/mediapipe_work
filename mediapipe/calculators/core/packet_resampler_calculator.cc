@@ -30,6 +30,10 @@
 #include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/tool/options_util.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 namespace {
 
 // Creates a secure random number generator for use in ProcessWithJitter.
@@ -277,6 +281,9 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
 }
 
 ::mediapipe::Status PacketResamplerCalculator::Process(CalculatorContext* cc) {
+  __android_log_print(
+    ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator input-time %ld",
+    cc->InputTimestamp().Microseconds());
   if (cc->InputTimestamp() == Timestamp::PreStream() &&
       cc->Inputs().UsesTags() && cc->Inputs().HasTag("VIDEO_HEADER") &&
       !cc->Inputs().Tag("VIDEO_HEADER").IsEmpty()) {
@@ -333,11 +340,15 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
   RET_CHECK_GT(cc->InputTimestamp(), Timestamp::PreStream());
   RET_CHECK_EQ(jitter_, 0.0);
 
+  __android_log_print(
+    ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 001");
   if (first_timestamp_ == Timestamp::Unset()) {
     // This is the first packet, initialize the first_timestamp_.
     if (base_timestamp_ == Timestamp::Unset()) {
       // Initialize first_timestamp_ with exactly the first packet timestamp.
       first_timestamp_ = cc->InputTimestamp();
+      __android_log_print(
+        ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 002");
     } else {
       // Initialize first_timestamp_ with the first packet timestamp
       // aligned to the base_timestamp_.
@@ -345,11 +356,15 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
           (cc->InputTimestamp() - base_timestamp_).Seconds() * frame_rate_);
       first_timestamp_ =
           base_timestamp_ + TimestampDiffFromSeconds(first_index / frame_rate_);
+      __android_log_print(
+        ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 003");
     }
     if (cc->Outputs().UsesTags() && cc->Outputs().HasTag("VIDEO_HEADER")) {
       cc->Outputs()
           .Tag("VIDEO_HEADER")
           .Add(new VideoHeader(video_header_), Timestamp::PreStream());
+      __android_log_print(
+        ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 004");
     }
   }
   const Timestamp received_timestamp = cc->InputTimestamp();
@@ -361,10 +376,15 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
     // Fill the empty periods until we are in the same index as the received
     // packet.
     while (received_timestamp_idx > period_count_) {
+      __android_log_print(
+        ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter received_timestamp_idx > period_count_.");
       OutputWithinLimits(
           cc, last_packet_.At(PeriodIndexToTimestamp(period_count_)));
       ++period_count_;
     }
+
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 006");
     // Now, if the received packet has a timestamp larger than the middle of
     // the current period, we can send a packet without waiting. We send the
     // one closer to the middle.
@@ -375,12 +395,18 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
           !have_last_packet || (received_timestamp - target_timestamp <=
                                 target_timestamp - last_packet_.Timestamp());
       if (send_current) {
+        __android_log_print(
+          ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter send_current.");
         OutputWithinLimits(
             cc, cc->Inputs().Get(input_data_id_).Value().At(target_timestamp));
       } else {
+        __android_log_print(
+          ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter NOT send_current.");
         OutputWithinLimits(cc, last_packet_.At(target_timestamp));
       }
       ++period_count_;
+      __android_log_print(
+        ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 007");
     }
     // TODO: Add a mechanism to the framework to allow these packets
     // to be output earlier (without waiting for a much later packet to
@@ -390,6 +416,8 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
     cc->Outputs()
         .Get(output_data_id_)
         .SetNextTimestampBound(PeriodIndexToTimestamp(period_count_));
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator ProcessWithoutJitter 008");
   }
   return ::mediapipe::OkStatus();
 }
@@ -402,6 +430,8 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
   // haven't sent anything for its period.
   if (first_timestamp_ != Timestamp::Unset() && flush_last_packet_ &&
       TimestampToPeriodIndex(last_packet_.Timestamp()) == period_count_) {
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator Close() before output.");
     OutputWithinLimits(cc,
                        last_packet_.At(PeriodIndexToTimestamp(period_count_)));
   }
@@ -427,6 +457,9 @@ void PacketResamplerCalculator::OutputWithinLimits(CalculatorContext* cc,
   TimestampDiff margin((round_limits_) ? frame_time_usec_ / 2 : 0);
   if (packet.Timestamp() >= start_time_ - margin &&
       packet.Timestamp() < end_time_ + margin) {
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "?? PacketResamplerCalculator real-output-packet-time %ld",
+      packet.Timestamp().Microseconds());
     cc->Outputs().Get(output_data_id_).AddPacket(packet);
   }
 }

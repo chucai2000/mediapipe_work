@@ -23,7 +23,7 @@ output_stream: "output_video"
 node {
   calculator: "FlowLimiterCalculator"
   input_stream: "input_video"
-  input_stream: "FINISHED:render_data"
+  input_stream: "FINISHED:output_detections_face"
   input_stream_info: {
     tag_index: "FINISHED"
     back_edge: true
@@ -59,20 +59,25 @@ node: {
 }
 
 # ----------- For posenet -----------
+#node {
+#  calculator: "PacketResamplerCalculator"
+#  input_stream: "input_video_cpu"
+#  output_stream: "downsampled_input_video_cpu"
+#  #input_side_packet: "OPTIONS:packet_resampler_options"
+#  node_options: {
+#    [type.googleapis.com/mediapipe.PacketResamplerCalculatorOptions] {
+#      frame_rate: 3.75
+#    }
+#  }
+#}
 node {
-  calculator: "PacketResamplerCalculator"
+  calculator: "StreamDownsamplerCalculator"
   input_stream: "input_video_cpu"
   output_stream: "downsampled_input_video_cpu"
-  #input_side_packet: "OPTIONS:packet_resampler_options"
-  node_options: {
-    [type.googleapis.com/mediapipe.PacketResamplerCalculatorOptions] {
-      frame_rate: 3.0
-    }
-  }
 }
 node: {
   calculator: "ImageTransformationCalculator"
-  input_stream: "IMAGE:input_video_cpuwo"
+  input_stream: "IMAGE:downsampled_input_video_cpu"
   output_stream: "IMAGE:transformed_input_video_pose_cpu"
   output_stream: "LETTERBOX_PADDING:letterbox_padding_pose"
   node_options: {
@@ -213,22 +218,16 @@ node {
 }
 
 # ----------- For both facenet and posenet -----------
-#node {
-#  calculator: "DetectionsToRenderDataCalculator"
-#  input_stream: "DETECTIONS:output_detections_face"
-#  output_stream: "RENDER_DATA:render_data_face"
-#  node_options: {
-#    [type.googleapis.com/mediapipe.DetectionsToRenderDataCalculatorOptions] {
-#      thickness: 10.0
-#      color { r: 255 g: 0 b: 0 }
-#    }
-#  }
-#}
 node {
   calculator: "SyncDetectionsCalculator"
   input_stream: "output_detections_face"
   input_stream: "output_detections_pose"
   output_stream: "RENDER_DATA:render_data"
+
+  #input_stream_handler {
+  #  input_stream_handler: 'ImmediateInputStreamHandler'
+  #}
+
 }
 
 
