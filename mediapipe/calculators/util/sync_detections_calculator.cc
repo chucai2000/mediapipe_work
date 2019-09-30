@@ -103,7 +103,7 @@ REGISTER_CALCULATOR(SyncDetectionsCalculator);
     return ::mediapipe::OkStatus();
   }
 
-  std::vector<std::pair<float, float>> key_points_of_all_parts;
+  std::vector<std::vector<std::pair<float, float>>> key_points_of_all_parts;
   if (cc->Inputs().NumEntries() >= 2 && !cc->Inputs().Index(1).IsEmpty()) {
     __android_log_print(
       ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator exist pose");
@@ -114,14 +114,20 @@ REGISTER_CALCULATOR(SyncDetectionsCalculator);
     const int kOrigImageHeight = 1440;
     const auto& input_pose_detections =
         cc->Inputs().Index(1).Get<std::vector<Detection>>();
-    RET_CHECK(input_pose_detections.size() == kNumLayers);
-    key_points_of_all_parts.resize(kNumLayers);
-    for (int k = 0; k < kNumLayers; ++k) {
-      key_points_of_all_parts[k] = {
-          input_pose_detections[k].location_data().relative_bounding_box().ymin(),
-          input_pose_detections[k].location_data().relative_bounding_box().xmin()};
-      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts k = %d, y=%.3f, x=%.3f ",
-      //    k, key_points_of_all_parts[k].first, key_points_of_all_parts[k].second);
+
+    int num_persons = input_pose_detections.size() / kNumLayers;
+    __android_log_print(
+      ANDROID_LOG_INFO, "debug_yichuc", "SyncDetectionsCalculator num_persons = %d, input_pose_detections.size() = %lu", num_persons, input_pose_detections.size());
+    key_points_of_all_parts.resize(num_persons);
+    for (int p = 0; p < num_persons; ++p) {
+      key_points_of_all_parts[p].resize(kNumLayers);
+      for (int k = 0; k < kNumLayers; ++k) {
+        key_points_of_all_parts[p][k] = {
+            input_pose_detections[p * kNumLayers + k].location_data().relative_bounding_box().ymin(),
+            input_pose_detections[p * kNumLayers + k].location_data().relative_bounding_box().xmin()};
+        //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "relative_key_points_of_all_parts k = %d, y=%.3f, x=%.3f ",
+        //    k, key_points_of_all_parts[k].first, key_points_of_all_parts[k].second);
+      }
     }
   }
 
@@ -143,37 +149,67 @@ REGISTER_CALCULATOR(SyncDetectionsCalculator);
   if (cc->Outputs().HasTag("RENDER_DATA")) {
     auto render_data = absl::make_unique<RenderData>();
     float radius = 0.01;
-    for (int k = 0; k < key_points_of_all_parts.size(); ++k) {
-      //int k_col = static_cast<int>(key_points_of_all_parts.at(k).second * kOrigImageWidth);
-      //int k_row = static_cast<int>(key_points_of_all_parts.at(k).first * kOrigImageHeight);
-      //__android_log_print(ANDROID_LOG_INFO, "debug_yichuc", "orig_image_keypoint k %d, k_col %d, k_row %d ", k, k_col, k_row);
 
-      auto *pose_annotation = render_data->add_render_annotations();
-      auto *location_data_rect = pose_annotation->mutable_rectangle();
-      location_data_rect->set_normalized(true);
-      location_data_rect->set_left(std::max(0.f, key_points_of_all_parts.at(k).second - radius));
-      location_data_rect->set_top(std::max(0.f, key_points_of_all_parts.at(k).first - radius));
-      location_data_rect->set_right(std::min(1.f, key_points_of_all_parts.at(k).second + radius));
-      location_data_rect->set_bottom(std::min(1.f, key_points_of_all_parts.at(k).first + radius));
+    for (int p = 0; p < key_points_of_all_parts.size(); ++p) {
+      for (int k = 0; k < key_points_of_all_parts[p].size(); ++k) {
+        auto *pose_annotation = render_data->add_render_annotations();
+        auto *location_data_rect = pose_annotation->mutable_rectangle();
+        location_data_rect->set_normalized(true);
+        location_data_rect->set_left(std::max(0.f, key_points_of_all_parts.at(p).at(k).second - radius));
+        location_data_rect->set_top(std::max(0.f, key_points_of_all_parts.at(p).at(k).first - radius));
+        location_data_rect->set_right(std::min(1.f, key_points_of_all_parts.at(p).at(k).second + radius));
+        location_data_rect->set_bottom(std::min(1.f, key_points_of_all_parts.at(p).at(k).first + radius));
 
-      if (k == 0) {
-        pose_annotation->mutable_color()->set_r(255);
-        pose_annotation->mutable_color()->set_g(0);
-        pose_annotation->mutable_color()->set_b(0);
-      } else if (k == 1) {
-        pose_annotation->mutable_color()->set_r(0);
-        pose_annotation->mutable_color()->set_g(255);
-        pose_annotation->mutable_color()->set_b(0);
-      } else {
-        pose_annotation->mutable_color()->set_r(255);
-        pose_annotation->mutable_color()->set_g(255);
-        pose_annotation->mutable_color()->set_b(102);
+        if (k == 0) {
+          pose_annotation->mutable_color()->set_r(255);
+          pose_annotation->mutable_color()->set_g(0);
+          pose_annotation->mutable_color()->set_b(0);
+        } else if (k == 1) {
+          pose_annotation->mutable_color()->set_r(0);
+          pose_annotation->mutable_color()->set_g(255);
+          pose_annotation->mutable_color()->set_b(0);
+        } else if (k == 9) {
+          pose_annotation->mutable_color()->set_r(0);
+          pose_annotation->mutable_color()->set_g(20);
+          pose_annotation->mutable_color()->set_b(255);
+        } else {
+          pose_annotation->mutable_color()->set_r(255);
+          pose_annotation->mutable_color()->set_g(255);
+          pose_annotation->mutable_color()->set_b(102);
+        }
+        pose_annotation->set_thickness(3);
       }
-      pose_annotation->set_thickness(3);
+
+      if (key_points_of_all_parts.size() > 0) {
+        std::vector<std::pair<int, int>> connect_line = {
+          {9,  7},
+          {7,  5},
+          {10, 8},
+          {8,  6},
+          {5,  6},
+          {5,  11},
+          {6,  12},
+          {11, 12}
+        };
+        for (int k = 0; k < connect_line.size(); ++k) {
+          auto *pose_line = render_data->add_render_annotations();
+          auto *location_data_line = pose_line->mutable_line();
+          location_data_line->set_normalized(true);
+          location_data_line->set_x_start(key_points_of_all_parts.at(p).at(connect_line[k].first).second);
+          location_data_line->set_y_start(key_points_of_all_parts.at(p).at(connect_line[k].first).first);
+          location_data_line->set_x_end(key_points_of_all_parts.at(p).at(connect_line[k].second).second);
+          location_data_line->set_y_end(key_points_of_all_parts.at(p).at(connect_line[k].second).first);
+
+          pose_line->mutable_color()->set_r(0);
+          pose_line->mutable_color()->set_g(255);
+          pose_line->mutable_color()->set_b(255);
+          pose_line->set_thickness(5);
+        }
+      }
     }
 
     for (int k = 0; k < face_bounding_boxes.size(); ++k) {
-      auto* face_annotation = render_data->add_render_annotations();
+      auto *face_annotation = render_data->add_render_annotations();
       auto *location_data_rect = face_annotation->mutable_rectangle();
       location_data_rect->set_normalized(true);
       location_data_rect->set_left(face_bounding_boxes[k][0]);

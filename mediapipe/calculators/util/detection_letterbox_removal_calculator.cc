@@ -96,9 +96,9 @@ class DetectionLetterboxRemovalCalculator : public CalculatorBase {
   ::mediapipe::Status Process(CalculatorContext* cc) override {
     // Only process if there's input detections.
 
-    __android_log_print(
-      ANDROID_LOG_INFO, "debug_yichuc", "Face DetectionLetterboxRemovalCalculator input-time %ld",
-      cc->InputTimestamp().Microseconds());
+    //__android_log_print(
+    //  ANDROID_LOG_INFO, "debug_yichuc", "Face DetectionLetterboxRemovalCalculator input-time %ld",
+    //  cc->InputTimestamp().Microseconds());
 
     if (cc->Inputs().Tag(kDetectionsTag).IsEmpty()) {
       return ::mediapipe::OkStatus();
